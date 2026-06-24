@@ -354,6 +354,7 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     })
   }
 
+
   const shareCmds = () => {
     if (sync().data.config.share === "disabled") return []
     return [

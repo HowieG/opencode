@@ -45,6 +45,7 @@ import { DialogThemeList } from "./component/dialog-theme-list"
 import { DialogHelp } from "./ui/dialog-help"
 import { DialogAgent } from "./component/dialog-agent"
 import { DialogSessionList } from "./component/dialog-session-list"
+import { DialogImportClaude } from "./component/dialog-import-claude"
 import { DialogWorkspaceList } from "./component/dialog-workspace-list"
 import { DialogConsoleOrg } from "./component/dialog-console-org"
 import { ThemeProvider, useTheme } from "./context/theme"
@@ -579,6 +580,16 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
             type: "home",
           })
           dialog.clear()
+        },
+      },
+      {
+        name: "session.import_claude",
+        title: "Import Claude Code sessions",
+        category: "Session",
+        slashName: "import-claude",
+        slashAliases: ["claude-import"],
+        run: () => {
+          dialog.replace(() => <DialogImportClaude />)
         },
       },
       {

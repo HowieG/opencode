@@ -2032,6 +2032,13 @@ export type Config = {
   }
 }
 
+export type NotFoundError = {
+  name: "NotFoundError"
+  data: {
+    message: string
+  }
+}
+
 export type Model = {
   id: string
   providerID: string
@@ -2553,13 +2560,6 @@ export type ProviderAuthError1 = {
     field?: string
     message?: string
     kind?: string
-  }
-}
-
-export type NotFoundError = {
-  name: "NotFoundError"
-  data: {
-    message: string
   }
 }
 
@@ -3663,6 +3663,43 @@ export type ConfigV2ExperimentalPolicy = {
   action: "provider.use"
   effect: PolicyEffect
   resource: string
+}
+
+export type ClaudeImportSessionStatus = {
+  claudeSessionID: string
+  sourcePath: string
+  directory: string
+  title: string
+  lineCount: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  mtime: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  imported?: {
+    opencodeSessionID: string
+    importedAt: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    lineCount: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    sourceChanged: boolean
+  }
+}
+
+export type ClaudeImportImportResult =
+  | {
+      status: "imported"
+      opencodeSessionID: string
+      title: string
+      directory: string
+      importedTurns: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      skippedToolOnly: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    }
+  | {
+      status: "already-imported"
+      opencodeSessionID: string
+      lineCount: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      sourceLineCount: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    }
+
+export type ClaudeImportTeardownResult = {
+  removed: boolean
+  opencodeSessionID: string
+  reason: string
 }
 
 export type ProjectDirectories = Array<{
@@ -7270,6 +7307,102 @@ export type EventSubscribeResponses = {
 }
 
 export type EventSubscribeResponse = EventSubscribeResponses[keyof EventSubscribeResponses]
+
+export type ClaudeImportListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/import/claude/sessions"
+}
+
+export type ClaudeImportListErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ClaudeImportListError = ClaudeImportListErrors[keyof ClaudeImportListErrors]
+
+export type ClaudeImportListResponses = {
+  /**
+   * List of discovered Claude sessions with import status
+   */
+  200: Array<ClaudeImportSessionStatus>
+}
+
+export type ClaudeImportListResponse = ClaudeImportListResponses[keyof ClaudeImportListResponses]
+
+export type ClaudeImportTeardownData = {
+  body?: never
+  path: {
+    claudeSessionID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/import/claude/sessions/{claudeSessionID}"
+}
+
+export type ClaudeImportTeardownErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * NotFoundError
+   */
+  404: NotFoundError
+}
+
+export type ClaudeImportTeardownError = ClaudeImportTeardownErrors[keyof ClaudeImportTeardownErrors]
+
+export type ClaudeImportTeardownResponses = {
+  /**
+   * Teardown outcome
+   */
+  200: ClaudeImportTeardownResult
+}
+
+export type ClaudeImportTeardownResponse = ClaudeImportTeardownResponses[keyof ClaudeImportTeardownResponses]
+
+export type ClaudeImportImportData = {
+  body?: never
+  path: {
+    claudeSessionID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/import/claude/sessions/{claudeSessionID}"
+}
+
+export type ClaudeImportImportErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * NotFoundError
+   */
+  404: NotFoundError
+}
+
+export type ClaudeImportImportError = ClaudeImportImportErrors[keyof ClaudeImportImportErrors]
+
+export type ClaudeImportImportResponses = {
+  /**
+   * Imported (or skipped if already imported)
+   */
+  200: ClaudeImportImportResult
+}
+
+export type ClaudeImportImportResponse = ClaudeImportImportResponses[keyof ClaudeImportImportResponses]
 
 export type ConfigGetData = {
   body?: never

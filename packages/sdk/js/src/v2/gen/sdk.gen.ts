@@ -15,6 +15,12 @@ import type {
   AuthRemoveResponses,
   AuthSetErrors,
   AuthSetResponses,
+  ClaudeImportImportErrors,
+  ClaudeImportImportResponses,
+  ClaudeImportListErrors,
+  ClaudeImportListResponses,
+  ClaudeImportTeardownErrors,
+  ClaudeImportTeardownResponses,
   CommandListErrors,
   CommandListResponses,
   Config as Config3,
@@ -1384,6 +1390,106 @@ export class Event extends HeyApiClient {
     )
     return (options?.client ?? this.client).sse.get<EventSubscribeResponses, unknown, ThrowOnError>({
       url: "/event",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class ClaudeImport extends HeyApiClient {
+  /**
+   * List Claude sessions available to import
+   *
+   * Scan ~/.claude/projects for conversation files, join with the import ledger, and return one entry per session — newest first.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ClaudeImportListResponses, ClaudeImportListErrors, ThrowOnError>({
+      url: "/import/claude/sessions",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Remove an imported Claude session
+   *
+   * Delete the rows for a previously imported session (parts → messages → session) and clear its ledger entry.
+   */
+  public teardown<ThrowOnError extends boolean = false>(
+    parameters: {
+      claudeSessionID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "claudeSessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<
+      ClaudeImportTeardownResponses,
+      ClaudeImportTeardownErrors,
+      ThrowOnError
+    >({
+      url: "/import/claude/sessions/{claudeSessionID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Import a Claude session
+   *
+   * Parse the .jsonl identified by the Claude session UUID and write its text turns into opencode storage. Idempotent on the UUID.
+   */
+  public import<ThrowOnError extends boolean = false>(
+    parameters: {
+      claudeSessionID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "claudeSessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ClaudeImportImportResponses, ClaudeImportImportErrors, ThrowOnError>({
+      url: "/import/claude/sessions/{claudeSessionID}",
       ...options,
       ...params,
     })
@@ -6798,6 +6904,11 @@ export class OpencodeClient extends HeyApiClient {
   private _event?: Event
   get event(): Event {
     return (this._event ??= new Event({ client: this.client }))
+  }
+
+  private _claudeImport?: ClaudeImport
+  get claudeImport(): ClaudeImport {
+    return (this._claudeImport ??= new ClaudeImport({ client: this.client }))
   }
 
   private _config?: Config2
