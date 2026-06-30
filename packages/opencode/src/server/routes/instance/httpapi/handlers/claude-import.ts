@@ -8,13 +8,36 @@
 import { Effect } from "effect"
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi"
 import { ClaudeDiscovery, ClaudeParser, ClaudeWriter } from "@/import/claude"
+import { Project } from "@/project/project"
 import { InstanceHttpApi } from "../api"
 import { notFound } from "../errors"
 
 export const claudeImportHandlers = HttpApiBuilder.group(InstanceHttpApi, "claude-import", (handlers) =>
   Effect.gen(function* () {
+    const project = yield* Project.Service
+
     const list = Effect.fn("ClaudeImportHttpApi.list")(function* () {
-      return yield* Effect.sync(() => ClaudeDiscovery.listSessions())
+      const rows = yield* Effect.sync(() => ClaudeDiscovery.listSessions())
+      // Per-cwd cache so we don't git-resolve the same dir twice in a single request.
+      const worktreeCache = new Map<string, string>()
+      const enriched = yield* Effect.forEach(
+        rows,
+        (row) =>
+          Effect.gen(function* () {
+            let projectWorktree = worktreeCache.get(row.directory)
+            if (!projectWorktree) {
+              const resolved = yield* project.fromDirectory(row.directory).pipe(
+                Effect.map((r) => (r.project.vcs ? r.project.worktree : row.directory)),
+                Effect.catch(() => Effect.succeed(row.directory)),
+              )
+              projectWorktree = resolved
+              worktreeCache.set(row.directory, projectWorktree)
+            }
+            return { ...row, projectWorktree }
+          }),
+        { concurrency: 8 },
+      )
+      return enriched
     })
 
     const importOne = Effect.fn("ClaudeImportHttpApi.import")(function* (ctx: {
@@ -48,6 +71,7 @@ export const claudeImportHandlers = HttpApiBuilder.group(InstanceHttpApi, "claud
         opencodeSessionID: string
         title: string
         directory: string
+        projectWorktree: string
         importedTurns: number
         skippedToolOnly: number
       } = {
@@ -55,6 +79,7 @@ export const claudeImportHandlers = HttpApiBuilder.group(InstanceHttpApi, "claud
         opencodeSessionID: String(result.opencodeSessionID),
         title: result.title,
         directory: result.directory,
+        projectWorktree: (result as { projectWorktree: string }).projectWorktree,
         importedTurns: result.importedTurns,
         skippedToolOnly: result.skippedToolOnly,
       }

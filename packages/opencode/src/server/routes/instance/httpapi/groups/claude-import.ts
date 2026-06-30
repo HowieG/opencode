@@ -29,7 +29,10 @@ const ImportedInfo = Schema.Struct({
 export const SessionStatus = Schema.Struct({
   claudeSessionID: Schema.String,
   sourcePath: Schema.String,
+  /** The raw cwd recorded in the .jsonl. */
   directory: Schema.String,
+  /** The opencode project worktree the cwd resolves to (after git collapse). Same as `directory` for non-git cwds. */
+  projectWorktree: Schema.String,
   title: Schema.String,
   lineCount: Schema.Number,
   mtime: Schema.Number,
@@ -40,7 +43,10 @@ const ImportResultSuccess = Schema.Struct({
   status: Schema.Literal("imported"),
   opencodeSessionID: Schema.String,
   title: Schema.String,
+  /** The source cwd (.jsonl's recorded directory). */
   directory: Schema.String,
+  /** The opencode project worktree the session was filed under — used by the UI to register it in the sidebar. */
+  projectWorktree: Schema.String,
   importedTurns: Schema.Number,
   skippedToolOnly: Schema.Number,
 })

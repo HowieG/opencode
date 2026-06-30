@@ -12,10 +12,12 @@
 // STEP1-API-MAP.md §3), so V1-only writes are sufficient for continuation.
 
 import path from "path"
+import { createHash } from "crypto"
 import { eq } from "drizzle-orm"
 import { Effect, Schema } from "effect"
 import { Database } from "@opencode-ai/core/database/database"
 import { SessionTable, MessageTable, PartTable } from "@opencode-ai/core/session/sql"
+import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Slug } from "@opencode-ai/core/util/slug"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
@@ -25,10 +27,22 @@ import { Project } from "@/project/project"
 import type { ParsedSession } from "./parser"
 import * as Ledger from "./ledger"
 
+/**
+ * Deterministic 40-char hex id keyed on the cwd. Used as a fallback for cwds
+ * with no git context (which Project.Service.fromDirectory would collapse
+ * into the single "global" project — we want them as distinct sidebar entries).
+ */
+function projectIdForCwd(cwd: string): string {
+  return createHash("sha1").update("claude-import:" + cwd).digest("hex")
+}
+
 export type ImportResult = {
   opencodeSessionID: string
   title: string
+  /** The conversation's recorded cwd (source). */
   directory: string
+  /** The opencode project worktree the session was filed under — what the sidebar opens. */
+  projectWorktree: string
   importedTurns: number
   skippedToolOnly: number
 }
@@ -53,14 +67,17 @@ const decodePart = Schema.decodeUnknownSync(SessionV1.Part)
  * Import one parsed Claude session. Idempotent on the Claude session UUID.
  * Requires Database.Service + Project.Service in the effect context.
  *
- * The session is filed under the opencode Project for the .jsonl's recorded cwd
- * (creating that project if it doesn't exist). This makes the import operation
- * project-agnostic — it doesn't depend on what the caller currently has open.
+ * Project resolution (hybrid):
+ *  - Git-tracked cwd → use Project.Service.fromDirectory so opencode's normal
+ *    git-aware logic collapses sibling worktrees (e.g. conductor workspaces of
+ *    open-memory) into a single project.
+ *  - No git → fall back to a deterministic per-cwd project row, so naked dirs
+ *    don't all merge into the single "global" bucket.
  */
 export const importSession = (parsed: ParsedSession) =>
   Effect.gen(function* () {
-    const project = yield* Project.Service
     const { db } = yield* Database.Service
+    const project = yield* Project.Service
 
     const existing = Ledger.findByClaudeID(parsed.claudeSessionID)
     if (existing) {
@@ -73,19 +90,45 @@ export const importSession = (parsed: ParsedSession) =>
       } satisfies ImportOutcome
     }
 
-    // Find or create the opencode project for the conversation's recorded cwd.
-    // This is what makes "central" import work — the calling context is not used.
-    const { project: proj } = yield* project.fromDirectory(parsed.directory)
-
     const sessionID = SessionID.descending()
     const now = Date.now()
+
+    // Resolve the project for this cwd.
+    let projectID: string
+    let projectWorktree: string
+    const resolved = yield* project.fromDirectory(parsed.directory).pipe(
+      Effect.map((r) => ({ ok: true as const, value: r })),
+      Effect.catch(() => Effect.succeed({ ok: false as const })),
+    )
+    if (resolved.ok && resolved.value.project.vcs) {
+      // Git-tracked: trust opencode's resolution (collapses worktrees + monorepo siblings).
+      projectID = resolved.value.project.id
+      projectWorktree = resolved.value.project.worktree
+    } else {
+      // No git context — create a per-cwd project so distinct naked dirs stay separate.
+      projectID = projectIdForCwd(parsed.directory)
+      projectWorktree = parsed.directory
+      yield* db
+        .insert(ProjectTable)
+        .values({
+          id: projectID as never,
+          worktree: projectWorktree as never,
+          vcs: null,
+          sandboxes: [projectWorktree] as never,
+          time_created: now,
+          time_updated: now,
+        })
+        .onConflictDoNothing()
+        .run()
+        .pipe(Effect.orDie)
+    }
 
     const info = Schema.decodeUnknownSync(Session.Info)({
       id: sessionID,
       slug: Slug.create(),
-      projectID: proj.id,
+      projectID,
       directory: parsed.directory,
-      path: path.relative(path.resolve(proj.worktree), parsed.directory).replaceAll("\\", "/"),
+      path: path.relative(path.resolve(projectWorktree), parsed.directory).replaceAll("\\", "/") || ".",
       title: parsed.title,
       version: InstallationVersion,
       time: { created: now, updated: now },
@@ -133,7 +176,7 @@ export const importSession = (parsed: ParsedSession) =>
         providerID: DEFAULT_PROVIDER,
         mode: "build",
         agent: "build",
-        path: { cwd: parsed.directory, root: proj.worktree },
+        path: { cwd: parsed.directory, root: projectWorktree },
         cost: 0,
         tokens: {
           input: u.input,
@@ -160,6 +203,7 @@ export const importSession = (parsed: ParsedSession) =>
       opencodeSessionID: sessionID,
       title: parsed.title,
       directory: parsed.directory,
+      projectWorktree,
       importedTurns: imported,
       skippedToolOnly: parsed.skippedToolOnly,
     } satisfies ImportOutcome
