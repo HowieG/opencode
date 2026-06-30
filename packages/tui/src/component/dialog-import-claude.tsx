@@ -86,13 +86,14 @@ export function DialogImportClaude() {
     })()
   })
 
-  // Group by directory, sorted.
+  // Group by resolved project worktree (git-collapsed; falls back to raw cwd for non-git).
   const groups = createMemo(() => {
     const map = new Map<string, ClaudeImportSessionStatus[]>()
     for (const r of rows()) {
-      const list = map.get(r.directory) ?? []
+      const key = r.projectWorktree ?? r.directory
+      const list = map.get(key) ?? []
       list.push(r)
-      map.set(r.directory, list)
+      map.set(key, list)
     }
     return Array.from(map.entries())
       .map(([directory, items]) => ({ directory, items }))
@@ -150,10 +151,11 @@ export function DialogImportClaude() {
       for (const row of g.items) {
         const s = status[row.claudeSessionID]
         const navigable = s?.kind === "done" && s.opencodeSessionID
+        const cwdSuffix = row.directory !== g.directory ? ` · ${row.directory}` : ""
         out.push({
           title: `    ${stripPrefix(row.title)}`,
           value: { kind: "row", row },
-          description: `${num(row.lineCount)} lines · ${relativeTime(num(row.mtime))}`,
+          description: `${num(row.lineCount)} lines · ${relativeTime(num(row.mtime))}${cwdSuffix}`,
           footer: rowBadge(s),
           onSelect: navigable
             ? () => {

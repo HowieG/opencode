@@ -3669,6 +3669,7 @@ export type ClaudeImportSessionStatus = {
   claudeSessionID: string
   sourcePath: string
   directory: string
+  projectWorktree: string
   title: string
   lineCount: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
   mtime: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
@@ -3686,6 +3687,7 @@ export type ClaudeImportImportResult =
       opencodeSessionID: string
       title: string
       directory: string
+      projectWorktree: string
       importedTurns: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
       skippedToolOnly: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
     }
@@ -7311,10 +7313,7 @@ export type EventSubscribeResponse = EventSubscribeResponses[keyof EventSubscrib
 export type ClaudeImportListData = {
   body?: never
   path?: never
-  query?: {
-    directory?: string
-    workspace?: string
-  }
+  query?: never
   url: "/import/claude/sessions"
 }
 
@@ -7341,10 +7340,7 @@ export type ClaudeImportTeardownData = {
   path: {
     claudeSessionID: string
   }
-  query?: {
-    directory?: string
-    workspace?: string
-  }
+  query?: never
   url: "/import/claude/sessions/{claudeSessionID}"
 }
 
@@ -7375,10 +7371,7 @@ export type ClaudeImportImportData = {
   path: {
     claudeSessionID: string
   }
-  query?: {
-    directory?: string
-    workspace?: string
-  }
+  query?: never
   url: "/import/claude/sessions/{claudeSessionID}"
 }
 

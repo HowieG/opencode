@@ -5,6 +5,7 @@ import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { Icon } from "@opencode-ai/ui/icon"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useServerSDK } from "@/context/server-sdk"
+import { useServer } from "@/context/server"
 import { showToast } from "@/utils/toast"
 import type { ClaudeImportSessionStatus } from "@opencode-ai/sdk/v2/client"
 
@@ -37,12 +38,13 @@ type Group = {
   rows: ClaudeImportSessionStatus[]
 }
 
-function groupByDirectory(rows: ClaudeImportSessionStatus[]): Group[] {
+function groupByProject(rows: ClaudeImportSessionStatus[]): Group[] {
   const map = new Map<string, ClaudeImportSessionStatus[]>()
   for (const row of rows) {
-    const list = map.get(row.directory) ?? []
+    const key = row.projectWorktree ?? row.directory
+    const list = map.get(key) ?? []
     list.push(row)
-    map.set(row.directory, list)
+    map.set(key, list)
   }
   return Array.from(map.entries())
     .map(([directory, rows]) => ({ directory, rows }))
@@ -51,6 +53,7 @@ function groupByDirectory(rows: ClaudeImportSessionStatus[]): Group[] {
 
 export const DialogImportClaude: Component = () => {
   const serverSDK = useServerSDK()
+  const server = useServer()
   const dialog = useDialog()
 
   const [status, setStatus] = createStore<Record<string, RowStatus>>({})
@@ -66,7 +69,7 @@ export const DialogImportClaude: Component = () => {
   })
 
   const rows = createMemo(() => rowsResource() ?? [])
-  const groups = createMemo(() => groupByDirectory(rows()))
+  const groups = createMemo(() => groupByProject(rows()))
 
   // Auto-run imports on mount once the row list is loaded.
   onMount(() => {
@@ -74,15 +77,27 @@ export const DialogImportClaude: Component = () => {
       // wait for the first non-loading resource value
       while (rowsResource.loading) await new Promise((r) => setTimeout(r, 50))
       const queue = rows().filter((r) => !r.imported)
-      if (!queue.length) return
+      // Each session's *project worktree* (post-git-resolution) is what the sidebar opens.
+      // For already-imported rows we don't have it from the list endpoint, so we approximate
+      // by using row.directory — fine for non-git cwds (the writer files them per-cwd anyway).
+      const worktreesToRegister = new Set<string>()
+      for (const r of rows()) if (r.imported) worktreesToRegister.add(r.directory)
+      if (!queue.length) {
+        worktreesToRegister.forEach((dir) => server.projects.open(dir))
+        return
+      }
       let done = 0
       let failed = 0
       for (const row of queue) {
         setStatus(row.claudeSessionID, { kind: "importing" })
         try {
           const res = await serverSDK().client.claudeImport.import({ claudeSessionID: row.claudeSessionID })
-          if (!res.data) throw new Error("empty response from import")
+          const result = res.data
+          if (!result) throw new Error("empty response from import")
           setStatus(row.claudeSessionID, { kind: "done" })
+          // Use the resolved project worktree from the import response (git-collapsed when applicable).
+          if (result.status === "imported") worktreesToRegister.add(result.projectWorktree)
+          else worktreesToRegister.add(row.directory) // already-imported fallback
           done++
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
@@ -90,6 +105,7 @@ export const DialogImportClaude: Component = () => {
           failed++
         }
       }
+      worktreesToRegister.forEach((dir) => server.projects.open(dir))
       if (failed) showToast({ title: `Imported ${done} · ${failed} failed` })
       else if (done) showToast({ title: `Imported ${done} session${done === 1 ? "" : "s"}` })
     })()
@@ -214,6 +230,9 @@ export const DialogImportClaude: Component = () => {
                           <For each={g.rows}>
                             {(row) => {
                               const badge = createMemo(() => rowBadge(status[row.claudeSessionID]))
+                              // Only surface the raw cwd inside the row when it differs from the group's
+                              // resolved project worktree — i.e. for git worktrees or monorepo subdirs.
+                              const cwdSuffix = row.directory !== g.directory ? ` · ${row.directory}` : ""
                               return (
                                 <div
                                   style={{
@@ -231,9 +250,10 @@ export const DialogImportClaude: Component = () => {
                                         "font-size": "11px",
                                         color: "var(--ui-text-weak)",
                                         "margin-top": "2px",
+                                        "overflow-wrap": "anywhere",
                                       }}
                                     >
-                                      {num(row.lineCount)} lines · {relativeTime(num(row.mtime))}
+                                      {num(row.lineCount)} lines · {relativeTime(num(row.mtime))}{cwdSuffix}
                                     </div>
                                   </div>
                                   <span

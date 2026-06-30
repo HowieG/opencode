@@ -1402,28 +1402,10 @@ export class ClaudeImport extends HeyApiClient {
    *
    * Scan ~/.claude/projects for conversation files, join with the import ledger, and return one entry per session — newest first.
    */
-  public list<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      workspace?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "workspace" },
-          ],
-        },
-      ],
-    )
+  public list<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
     return (options?.client ?? this.client).get<ClaudeImportListResponses, ClaudeImportListErrors, ThrowOnError>({
       url: "/import/claude/sessions",
       ...options,
-      ...params,
     })
   }
 
@@ -1435,23 +1417,10 @@ export class ClaudeImport extends HeyApiClient {
   public teardown<ThrowOnError extends boolean = false>(
     parameters: {
       claudeSessionID: string
-      directory?: string
-      workspace?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "claudeSessionID" },
-            { in: "query", key: "directory" },
-            { in: "query", key: "workspace" },
-          ],
-        },
-      ],
-    )
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "claudeSessionID" }] }])
     return (options?.client ?? this.client).delete<
       ClaudeImportTeardownResponses,
       ClaudeImportTeardownErrors,
@@ -1471,23 +1440,10 @@ export class ClaudeImport extends HeyApiClient {
   public import<ThrowOnError extends boolean = false>(
     parameters: {
       claudeSessionID: string
-      directory?: string
-      workspace?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "claudeSessionID" },
-            { in: "query", key: "directory" },
-            { in: "query", key: "workspace" },
-          ],
-        },
-      ],
-    )
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "claudeSessionID" }] }])
     return (options?.client ?? this.client).post<ClaudeImportImportResponses, ClaudeImportImportErrors, ThrowOnError>({
       url: "/import/claude/sessions/{claudeSessionID}",
       ...options,
